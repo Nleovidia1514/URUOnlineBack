@@ -13,7 +13,19 @@ router.get('', loggedIn, (req, res) => {
 
 router.post('/register', authController.registerUser);
 
+router.post(
+  '/login',
+  passport.authenticate('local', {
+    session: true,
+  }),
+  authController.loginUser
+);
+
+router.get('/logout', loggedIn, authController.logoutUser);
+
+router
+  .route('/passResetCode')
+  .get(authController.sendPassResetCode)
+  .post(authController.verifyResetcode);
 
 module.exports = router;
-
-

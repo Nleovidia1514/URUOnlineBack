@@ -24,6 +24,11 @@ app.use(
 
 const passportMiddleware = require('./middleware/passport');
 
+app.use(passport.initialize());
+app.use(passport.session());
+passport.use(passportMiddleware);
+
+
 //ROUTES
 const authRoutes = require('./routes/auth');
 
@@ -31,9 +36,6 @@ app.use('/auth', authRoutes);
 
 //
 
-app.use(passport.initialize());
-app.use(passport.session());
-passport.use(passportMiddleware);
 
 app.listen(process.env.PORT || 3000, () => {
   console.log('Server listening on http://localhost:3000');
