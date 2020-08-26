@@ -23,6 +23,7 @@ router.post(
 
 router.get('/logout', loggedIn, authController.logoutUser);
 
+router.post('/resetPass', authController.resetPassword);
 router
   .route('/passResetCode')
   .get(authController.sendPassResetCode)

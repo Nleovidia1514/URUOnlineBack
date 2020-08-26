@@ -4,8 +4,7 @@ const userSchema = new Schema({
   identification: {
     type: Number,
     required: true,
-    unique: true,
-    maxlength: 255
+    unique: true
   },
   email: {
     type: String,

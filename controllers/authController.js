@@ -1,9 +1,8 @@
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
 
 const User = require('../models/User');
 const ResetCode = require('../models/ResetCode');
-const config = require('../configuration/config');
+const mailer = require('../utils/mailer');
 
 function generateRandomCode() {
   const random = () => Math.round(Math.random() * 9);
@@ -13,7 +12,6 @@ function generateRandomCode() {
 module.exports = {
   registerUser: async (req, res) => {
     const user = new User(req.body);
-    console.log('registering user', req.body);
     if (!user.email || !user.password || !user.name) {
       res.status(400).json({
         error:
@@ -24,7 +22,6 @@ module.exports = {
     const exists = await User.findOne({
       $or: [{ email: user.email }, { identification: user.identification }],
     });
-    console.log(exists);
     if (exists) {
       res.status(401).json({
         error: {
@@ -70,7 +67,7 @@ module.exports = {
   updatePassword: (req, res) => {
     const passwords = req.body;
 
-    if (passwords.password !== passwords.passwordRepeat) {
+    if (passwords.password !== passwords.verifyPassword) {
       return res.status(400).json({
         error: {
           message: 'Las contraseñas no son iguales.',
@@ -87,6 +84,43 @@ module.exports = {
           .save()
           .then(() => {
             res.status(201).json(user);
+          })
+          .catch((err) =>
+            res.status(500).json({
+              error: {
+                message: err.message,
+                status: 500,
+                stack: 'save user to mongoDB [updatePassword]',
+              },
+            })
+          );
+      });
+    });
+  },
+
+  resetPassword: async (req, res) => {
+    const body = req.body;
+
+    if (body.password !== body.verifyPassword) {
+      return res.status(400).json({
+        error: {
+          message: 'Las contraseñas no son iguales.',
+          status: 400,
+          stack: 'updatePassword function [updatePassword]',
+        },
+      });
+    }
+    
+    const user = await User.findOne({ email: body.email });
+    bcrypt.genSalt(10, (err, salt) => {
+      bcrypt.hash(body.password, salt, (err, hash) => {
+        user.password = hash;
+        user
+          .save()
+          .then(() => {
+            res.status(201).json({
+              message: 'La contraseña se ha recuperado con exito!'
+            });
           })
           .catch((err) =>
             res.status(500).json({
@@ -155,29 +189,17 @@ module.exports = {
       });
     }
 
-    var transporter = nodemailer.createTransport({
-      service: config.mailer.service,
-      auth: {
-        user: config.mailer.sender,
-        pass: config.mailer.password,
-      },
-    });
-
-    var mailOptions = {
-      from: config.mailer.sender,
-      to: user.email,
-      subject: 'Codigo de recuperacion de contraseña',
-    };
-
+    await ResetCode.findOneAndRemove({ email: user.email });
     const code = new ResetCode({
       email: user.email,
       code: generateRandomCode(),
     });
-    mailOptions.html = `<p>Hola ${user.name},</p> <p>Tu codigo de recuperacion de contraseña es:</p><h1>${code.code}</h1>`;
+    
+    const htmlCode = `<p>Hola ${user.name},</p> <p>Tu codigo de recuperacion de contraseña es:</p><h1>${code.code}</h1>`;
     code
       .save()
       .then(() => {
-        transporter.sendMail(mailOptions, function (error, info) {
+        mailer.sendMail(user.email, 'Codigo de recuperación de contraseña', htmlCode, function (error, info) {
           if (error) {
             console.log(error);
           } else {
@@ -200,6 +222,7 @@ module.exports = {
   },
 
   verifyResetcode: async (req, res) => {
+
     if (!req.body.email || !req.body.code) {
       return res.status(400).json({
         error: {
