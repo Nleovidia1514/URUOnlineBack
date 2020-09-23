@@ -13,7 +13,7 @@ module.exports = {
       });
     }
 
-    const vote = await Vote.findOne({
+    let vote = await Vote.findOne({
       parentId: mongoose.Types.ObjectId(req.query.parentId),
       ownerId: mongoose.Types.ObjectId(req.user._id),
     });
