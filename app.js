@@ -42,8 +42,10 @@ passport.use(passportMiddleware);
 
 //ROUTES
 const authRoutes = require('./routes/auth');
+const postsRoutes = require('./routes/posts');
 
 app.use('/auth', authRoutes);
+app.use('/posts', postsRoutes);
 
 //
 

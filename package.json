@@ -16,6 +16,7 @@
     "fs-extra": "^9.0.1",
     "http-errors": "~1.6.3",
     "mongoose": "^5.9.27",
+    "mongoose-aggregate-paginate-v2": "^1.0.42",
     "morgan": "~1.9.1",
     "nodemailer": "^6.4.11",
     "passport": "^0.4.1",
