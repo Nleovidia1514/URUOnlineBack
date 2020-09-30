@@ -141,13 +141,25 @@ module.exports = {
         },
       },
     ]);
-    await new Promise(resolve => comments.forEach(async (comment, index) => {
-      comment.votes = await Vote.countDocuments({ parentId: mongoose.Types.ObjectId(comment._id) });
-      comments[index] = comment;
-      if (index === comments.length - 1) resolve(null);
-    }))
-    return res.status(200).json({
-      comments,
-    });
+    const promises = comments.map(
+      (comment, index) =>
+        new Promise(async (resolve) => {
+          comment.votes = await Vote.countDocuments({
+            parentId: mongoose.Types.ObjectId(comment._id),
+          });
+          if (req.user) {
+            comment.voted = await Vote.findOne({
+              parentId: mongoose.Types.ObjectId(comment._id),
+              ownerId: mongoose.Types.ObjectId(req.user._id),
+            });
+          } else {
+            comment.voted = false;
+          }
+          comments[index] = comment;
+          resolve();
+        })
+    );
+    await Promise.all(promises);
+    return res.status(200).json(comments);
   },
 };

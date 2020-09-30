@@ -4,17 +4,77 @@ const Vote = require('../models/Vote');
 const mongoose = require('mongoose');
 
 module.exports = {
-  getPosts: (req, res) => {
-    const { page } = req.query;
-    if (!page) {
+  getPosts: async (req, res) => {
+    const { page, id, filter } = req.query;
+    if (!page && !id) {
       return res.status(400).json({
         error: {
-          message: 'Envie el numero de pagina en los parametros.',
+          message: 'Envie el numero de pagina o el id en los parametros.',
           status: 400,
           stack: 'getPosts function',
         },
       });
     }
+
+    if (id) {
+      let post = await Post.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'ownerId',
+            foreignField: '_id',
+            as: 'owner',
+          },
+        },
+        {
+          $unwind: '$owner',
+        },
+        {
+          $match: {
+            _id: mongoose.Types.ObjectId(id),
+          },
+        },
+        {
+          $project: {
+            viewed: 1,
+            createdDate: 1,
+            tags: 1,
+            title: 1,
+            content: 1,
+            votes: 1,
+            'owner.profileImg': 1,
+            'owner.name': 1,
+            'owner.rating': 1,
+          },
+        },
+      ]);
+      if (post.length === 0) {
+        return res.status(404).json({
+          error: {
+            message: 'El post con el id especificado no existe.',
+            status: 404,
+            stack: 'getPosts function',
+          },
+        });
+      }
+      post = post[0];
+      if (req.user) {
+        post.voted =
+          (await Vote.findOne({
+            parentId: mongoose.Types.ObjectId(post._id),
+            ownerId: mongoose.Types.ObjectId(req.user._id),
+          })) !== null;
+      } else {
+        post.voted = false;
+      }
+      return res.status(200).json(post);
+    }
+    let sorting = {};
+    if (filter === 'rated') {
+      sorting.votes = -1;
+    } else if (filter === 'active') {
+    }
+    sorting.createdDate = -1;
     const aggregateQuery = Post.aggregate([
       {
         $lookup: {
@@ -25,13 +85,17 @@ module.exports = {
         },
       },
       {
-        $unwind: "$owner"
+        $sort: sorting,
+      },
+      {
+        $unwind: '$owner',
       },
       {
         $project: {
           viewed: 1,
           createdDate: 1,
           tags: 1,
+          votes: 1,
           title: 1,
           content: 1,
           'owner.profileImg': 1,
@@ -54,12 +118,17 @@ module.exports = {
             },
           });
         }
-        await new Promise(resolve => result.docs.forEach(async (post, index) => {
-          post.comments = await Comment.countDocuments({ postId: mongoose.Types.ObjectId(post._id) })
-          post.votes = await Vote.countDocuments({ parentId: mongoose.Types.ObjectId(post._id) })
-          result.docs[index] = post;
-          if (index === result.docs.length - 1) resolve(null);
-        }))
+        const promises = result.docs.map(
+          (post, index) =>
+            new Promise(async (resolve) => {
+              post.comments = await Comment.countDocuments({
+                postId: mongoose.Types.ObjectId(post._id),
+              });
+              result.docs[index] = post;
+              resolve();
+            })
+        );
+        await Promise.all(promises);
         return res.status(200).json(result);
       }
     );
@@ -150,14 +219,24 @@ module.exports = {
     }
     post
       .deleteOne()
-      .then(() => new Promise(async (resolve) => {
-        const comments = await Comment.find({ postId: mongoose.Types.ObjectId(req.query.postId) });
-        comments.forEach(async (com) => {
-          await Vote.deleteMany({ parentId: mongoose.Types.ObjectId(com._id) })
+      .then(() => {
+        new Promise(async (resolve) => {
+          const comments = await Comment.find({
+            postId: mongoose.Types.ObjectId(req.query.postId),
+          });
+          const promises = comments.map((com) =>
+            Vote.deleteMany({ parentId: mongoose.Types.ObjectId(com._id) })
+          );
+          await Promise.all(promises);
+          await Comment.deleteMany({
+            postId: mongoose.Types.ObjectId(req.query.postId),
+          });
+          resolve();
         });
-        resolve(null);
-      }))
-      .then(() => Vote.deleteMany({ parentId: mongoose.Types.ObjectId(req.query.postId) }))
+      })
+      .then(() =>
+        Vote.deleteMany({ parentId: mongoose.Types.ObjectId(req.query.postId) })
+      )
       .then(() => {
         return res.status(200).json({
           message: 'El post ha sido eliminado con exito.',
@@ -172,5 +251,5 @@ module.exports = {
           },
         });
       });
-  }
+  },
 };

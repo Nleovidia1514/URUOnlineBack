@@ -1,5 +1,6 @@
 const Vote = require('../models/Vote');
 const mongoose = require('mongoose');
+const Post = require('../models/Post');
 
 module.exports = {
   addVote: async (req, res) => {
@@ -13,7 +14,7 @@ module.exports = {
       });
     }
 
-    const vote = await Vote.findOne({
+    let vote = await Vote.findOne({
       parentId: mongoose.Types.ObjectId(req.query.parentId),
       ownerId: mongoose.Types.ObjectId(req.user._id),
     });
@@ -32,6 +33,11 @@ module.exports = {
 
     vote
       .save()
+      .then(() => Post.updateOne({ _id: mongoose.Types.ObjectId(req.query.parentId) }, {
+        $inc: {
+          votes: 1
+        }
+      }))
       .then(() =>
         res.status(200).json({
           message: 'Se ha votado correctamente.',
@@ -76,6 +82,11 @@ module.exports = {
 
     vote
       .deleteOne()
+      .then(() => Post.updateOne({ _id: mongoose.Types.ObjectId(req.query.parentId) }, {
+        $inc: {
+          votes: -1
+        }
+      }))
       .then(() =>
         res.status(200).json({
           message: 'Se ha votado correctamente.',
