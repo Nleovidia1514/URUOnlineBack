@@ -45,6 +45,7 @@ module.exports = {
             'owner.profileImg': 1,
             'owner.name': 1,
             'owner.rating': 1,
+            'owner._id': 1,
           },
         },
       ]);
@@ -101,6 +102,7 @@ module.exports = {
           'owner.profileImg': 1,
           'owner.name': 1,
           'owner.rating': 1,
+          'owner._id': 1,
         },
       },
     ]);
@@ -144,7 +146,15 @@ module.exports = {
     post
       .save()
       .then(() => {
+        post.owner = {
+          email: req.user.email,
+          _id: req.user._id,
+          name: req.user.name
+        };
+        post.votes = 0;
+        post.voted = false;
         return res.status(201).json({
+          post,
           message: 'El post ha sido creado con exito.',
         });
       })

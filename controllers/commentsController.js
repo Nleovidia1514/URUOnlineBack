@@ -20,11 +20,43 @@ module.exports = {
     comment.ownerId = req.user._id;
     comment
       .save()
-      .then(() => {
-        return res.status(201).json({
-          error: {
-            message: 'El comentario ha sido creado con exito.',
+      .then((doc) =>
+        Comment.aggregate([
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'ownerId',
+              foreignField: '_id',
+              as: 'owner',
+            },
           },
+          {
+            $unwind: '$owner',
+          },
+          {
+            $match: {
+              _id: mongoose.Types.ObjectId(doc._id),
+            },
+          },
+          {
+            $project: {
+              content: 1,
+              createdDate: 1,
+              'owner._id': 1,
+              'owner.profileImg': 1,
+              'owner.name': 1,
+              'owner.rating': 1,
+            },
+          },
+        ])
+      )
+      .then((doc) => {
+        const comment = doc[0];
+        comment.votes = 0;
+        comment.voted = false;
+        return res.status(201).json({
+          comment,
+          message: 'El comentario ha sido creado con exito.',
         });
       })
       .catch((err) => {
@@ -60,9 +92,7 @@ module.exports = {
     Comment.findByIdAndDelete(req.query.commentId)
       .then((data) => {
         return res.status(200).json({
-          error: {
-            message: 'El comentario ha sido eliminado con exito.',
-          },
+          message: 'El comentario ha sido eliminado con exito.',
         });
       })
       .catch((err) => {
@@ -79,9 +109,7 @@ module.exports = {
     Comment.findByIdAndUpdate(req.body._id, req.body)
       .then((data) => {
         return res.status(200).json({
-          error: {
-            message: 'El comentario ha sido actualizado con exito.',
-          },
+          message: 'El comentario ha sido actualizado con exito.',
         });
       })
       .catch((err) => {
@@ -135,6 +163,7 @@ module.exports = {
         $project: {
           content: 1,
           createdDate: 1,
+          'owner._id': 1,
           'owner.profileImg': 1,
           'owner.name': 1,
           'owner.rating': 1,
