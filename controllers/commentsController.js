@@ -17,14 +17,14 @@ module.exports = {
     }
 
     const comment = new Comment(req.body);
-    comment.ownerId = req.user._id;
+    comment.owner = req.user._id;
     comment
       .save()
-      .then(() => {
+      .then((doc) => doc.populate('owner', '_id name profileImg rating').execPopulate())
+      .then((doc) => {
         return res.status(201).json({
-          error: {
-            message: 'El comentario ha sido creado con exito.',
-          },
+          message: 'El comentario ha sido creado con exito.',
+          comment: doc
         });
       })
       .catch((err) => {
@@ -114,33 +114,10 @@ module.exports = {
         },
       });
     }
-    const comments = await Comment.aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'ownerId',
-          foreignField: '_id',
-          as: 'owner',
-        },
-      },
-      {
-        $unwind: '$owner',
-      },
-      {
-        $match: {
-          postId: mongoose.Types.ObjectId(req.query.postId),
-        },
-      },
-      {
-        $project: {
-          content: 1,
-          createdDate: 1,
-          'owner.profileImg': 1,
-          'owner.name': 1,
-          'owner.rating': 1,
-        },
-      },
-    ]);
+    const comments = (await Comment.find({
+      postId: mongoose.Types.ObjectId(req.query.postId),
+    }).populate('owner', 'profileImg name rating _id')).map(x => x._doc);
+
     const promises = comments.map(
       (comment, index) =>
         new Promise(async (resolve) => {

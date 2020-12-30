@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const {mongoDbUrl} = require('./configuration/config');
+const { DB_URL: mongoDbUrl } = process.env;
 
 mongoose.connect(mongoDbUrl, {
     useNewUrlParser: true,

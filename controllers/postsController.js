@@ -17,37 +17,7 @@ module.exports = {
     }
 
     if (id) {
-      let post = await Post.aggregate([
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'ownerId',
-            foreignField: '_id',
-            as: 'owner',
-          },
-        },
-        {
-          $unwind: '$owner',
-        },
-        {
-          $match: {
-            _id: mongoose.Types.ObjectId(id),
-          },
-        },
-        {
-          $project: {
-            viewed: 1,
-            createdDate: 1,
-            tags: 1,
-            title: 1,
-            content: 1,
-            votes: 1,
-            'owner.profileImg': 1,
-            'owner.name': 1,
-            'owner.rating': 1,
-          },
-        },
-      ]);
+      let post = await Post.findOne({ _id: mongoose.Types.ObjectId(id) }).populate('owner', 'profileImg rating name _id');
       if (post.length === 0) {
         return res.status(404).json({
           error: {
@@ -57,7 +27,7 @@ module.exports = {
           },
         });
       }
-      post = post[0];
+      post = { ...post._doc };
       if (req.user) {
         post.voted =
           (await Vote.findOne({
@@ -79,7 +49,7 @@ module.exports = {
       {
         $lookup: {
           from: 'users',
-          localField: 'ownerId',
+          localField: 'owner',
           foreignField: '_id',
           as: 'owner',
         },
@@ -101,6 +71,7 @@ module.exports = {
           'owner.profileImg': 1,
           'owner.name': 1,
           'owner.rating': 1,
+          'owner._id': 1,
         },
       },
     ]);
@@ -136,7 +107,7 @@ module.exports = {
   createPost: (req, res) => {
     const post = new Post({
       title: req.body.title,
-      ownerId: req.user._id,
+      owner: req.user._id,
       content: req.body.content,
       tags: req.body.tags,
     });
@@ -144,7 +115,15 @@ module.exports = {
     post
       .save()
       .then(() => {
+        post.owner = {
+          email: req.user.email,
+          _id: req.user._id,
+          name: req.user.name
+        };
+        post.votes = 0;
+        post.voted = false;
         return res.status(201).json({
+          post,
           message: 'El post ha sido creado con exito.',
         });
       })

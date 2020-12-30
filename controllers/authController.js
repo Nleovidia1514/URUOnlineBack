@@ -3,6 +3,12 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const ResetCode = require('../models/ResetCode');
 const mailer = require('../utils/mailer');
+const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFICATION_SID } = process.env;
+const twilio = require('twilio')(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+function capitalizeName(name) {
+  return name.toLowerCase().replace(/\b(\w)/g, s => s.toUpperCase());
+}
 
 function generateRandomCode() {
   const random = () => Math.round(Math.random() * 9);
@@ -11,7 +17,12 @@ function generateRandomCode() {
 
 module.exports = {
   registerUser: async (req, res) => {
-    const user = new User(req.body);
+    const data = req.body;
+
+    data.name = capitalizeName(data.name);
+    data.lastname = capitalizeName(data.lastname);
+
+    const user = new User(data);
     if (!user.email || !user.password || !user.name) {
       res.status(400).json({
         error:
@@ -39,7 +50,12 @@ module.exports = {
         user
           .save()
           .then((user) => {
-            res.status(201).json(user);
+            req.login(user, function(err) {
+              if (err) {
+                console.log(err);
+              }
+              return res.status(201).json(user);
+            });
           })
           .catch((err) =>
             res.status(500).json({
@@ -54,8 +70,102 @@ module.exports = {
     });
   },
 
+  sendVerifyCode: async (req, res) => {
+    let verificationRequest;
+    try {
+      verificationRequest = await twilio.verify
+        .services(TWILIO_VERIFICATION_SID)
+        .verifications.create({ to: req.body.phoneNumber, channel: 'sms' });
+    } catch (e) {
+      return res.status(500).send(e);
+    }
+
+    console.log(verificationRequest);
+    return res.status(200).json({
+      message: 'Se ha enviado el codigo de verificacion al numero ingresado.',
+    });
+  },
+
+  verifyPhoneNumber: async (req, res) => {
+    const { verificationCode: code } = req.body;
+    let verificationResult;
+    
+    try {
+      verificationResult = await twilio.verify
+        .services(TWILIO_VERIFICATION_SID)
+        .verificationChecks.create({ code, to: req.body.phoneNumber });
+
+      if (verificationResult.status !== 'approved') {
+        return res.status(403).json({
+          message: 'La verificacion de numero de telefono ha fallado',
+        });
+      }
+      return res.status(200).json({
+        message: verificationResult.status,
+      });
+    } catch (e) {
+      console.log(verificationResult);
+      return res.status(403).json({
+        message: 'La verificacion de numero de telefono ha fallado.',
+      });
+    }
+  },
+
+  getUsers: async (req, res) => {
+    const { term } = req.query;
+
+    if (!term) {
+      return res.status(400).json({
+        error: {
+          message: 'Por favor envie los parametros adecuados.',
+          status: 400,
+          stack: 'getUsers function [getUsers]',
+        },
+      });
+    }
+
+    const results = await User.aggregate([
+      {
+        $match: {
+          $or: [
+            {
+              name: {
+                $regex: term,
+                $options: 'i',
+              },
+            },
+            {
+              email: {
+                $regex: term,
+                $options: 'i',
+              },
+            },
+            {
+              identification: {
+                $regex: term,
+                $options: 'i',
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          password: 0,
+        },
+      },
+    ]);
+
+    return res.status(200).json(results);
+  },
+
   loginUser: (req, res) => {
-    return res.status(200).json(req.user);
+    const loggedUser = {
+      ...req.user._doc,
+    };
+
+    delete loggedUser.password;
+    return res.status(200).json(loggedUser);
   },
 
   logoutUser: (req, res) => {
@@ -109,7 +219,7 @@ module.exports = {
         },
       });
     }
-    
+
     const user = await User.findOne({ email: body.email });
     bcrypt.genSalt(10, (err, salt) => {
       bcrypt.hash(body.password, salt, (err, hash) => {
@@ -118,7 +228,7 @@ module.exports = {
           .save()
           .then(() => {
             res.status(201).json({
-              message: 'La contraseña se ha recuperado con exito!'
+              message: 'La contraseña se ha recuperado con exito!',
             });
           })
           .catch((err) =>
@@ -134,7 +244,7 @@ module.exports = {
     });
   },
 
-  updateInfo: (req, res) => {
+  updateInfo: async (req, res) => {
     const { name, email, lastname, identification } = req.body;
     if (!name || !lastname || !identification || !email) {
       return res.status(400).json({
@@ -145,15 +255,20 @@ module.exports = {
         },
       });
     }
-    const user = new User(req.user);
-    user = {
-      ...user,
+    data = {
+      ...req.user._doc,
       ...req.body,
     };
-    user
-      .save()
-      .then(() => {
-        res.status(200).json(user);
+
+    data.name = capitalizeName(data.name);
+    data.lastname = capitalizeName(data.lastname);
+
+
+    User.findByIdAndUpdate(req.user._id, data, {
+      new: true
+    })
+      .then((doc) => {
+        res.status(200).json(doc);
       })
       .catch((err) =>
         res.status(500).json({
@@ -164,6 +279,25 @@ module.exports = {
           },
         })
       );
+  },
+
+  uploadProfileImg: async (req, res) => {
+    const user = await User.findById(req.user._id);
+
+    user.updateOne({
+      profileImg: req.file.location
+    }).then(() => {
+      res.status(200).json(user);
+    })
+    .catch((err) =>
+      res.status(500).json({
+        error: {
+          message: err.message,
+          status: 500,
+          stack: 'nose',
+        },
+      })
+    );
   },
 
   sendPassResetCode: async (req, res) => {
@@ -193,21 +327,26 @@ module.exports = {
       email: user.email,
       code: generateRandomCode(),
     });
-    
+
     const htmlCode = `<p>Hola ${user.name},</p> <p>Tu codigo de recuperacion de contraseña es:</p><h1>${code.code}</h1>`;
     code
       .save()
       .then(() => {
-        mailer.sendMail(user.email, 'Codigo de recuperación de contraseña', htmlCode, function (error, info) {
-          if (error) {
-            console.log(error);
-          } else {
-            res.status(200).json({
-              email: user.email,
-              message: 'El codigo ha sido enviado a ' + user.email,
-            });
+        mailer.sendMail(
+          user.email,
+          'Codigo de recuperación de contraseña',
+          htmlCode,
+          function (error, info) {
+            if (error) {
+              console.log(error);
+            } else {
+              res.status(200).json({
+                email: user.email,
+                message: 'El codigo ha sido enviado a ' + user.email,
+              });
+            }
           }
-        });
+        );
       })
       .catch((err) => {
         res.status(500).json({
@@ -221,7 +360,6 @@ module.exports = {
   },
 
   verifyResetcode: async (req, res) => {
-
     if (!req.body.email || !req.body.code) {
       return res.status(400).json({
         error: {

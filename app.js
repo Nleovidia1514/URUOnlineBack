@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 var logger = require('morgan');
@@ -43,10 +44,15 @@ passport.use(passportMiddleware);
 //ROUTES
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
+const courseRoutes = require('./routes/courses');
+const attachmentRoutes = require('./routes/attachment');
+const examRoutes = require('./routes/exam');
 
 app.use('/auth', authRoutes);
 app.use('/posts', postsRoutes);
-
+app.use('/courses', courseRoutes);
+app.use('/attachments', attachmentRoutes);
+app.use('/exams', examRoutes);
 //
 
 
