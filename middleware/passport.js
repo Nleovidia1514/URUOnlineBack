@@ -21,13 +21,11 @@ module.exports = new LocalStrategy(
 );
 
 passport.serializeUser((user, done) => {
-  console.log(user);
   done(null, user.id);
 });
 
 passport.deserializeUser((id, done) => {
   User.findById(id, (err, user) => {
-    console.log(user);
     done(err, user);
   });
 });

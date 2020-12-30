@@ -7,8 +7,9 @@ const postSchema = new Schema({
     required: true,
     maxlength: 100,
   },
-  ownerId: {
+  owner: {
     type: Schema.Types.ObjectId,
+    ref: 'Users',
     required: true,
     minlength: 6,
     maxlength: 500,

@@ -2,7 +2,7 @@ const { Schema, model } = require('mongoose');
 
 const userSchema = new Schema({
   identification: {
-    type: Number,
+    type: String,
     required: true,
     unique: true
   },
@@ -24,14 +24,12 @@ const userSchema = new Schema({
     type: String,
     required: true,
     trim: true,
-    lowercase: true,
     maxlength: 100
   },
   lastname: {
     type: String,
     required: false,
     trim: true,
-    lowercase: true,
     maxlength: 100
   },
   birthdate: {
@@ -43,15 +41,36 @@ const userSchema = new Schema({
     required: false,
     default: 0,
   },
+  type: {
+    type: String,
+    required: false,
+    default: 'alumn'
+  },
+  phoneNumber: {
+    type: String,
+    required: true,
+    maxlength: 100
+  },
   isActive: {
       type: Boolean,
       required: false,
-      default: true
+      default: true,
   },
   profileImg: {
     type: String,
-    default: '/img/profileDefault.jpg',
+    required: false,
+    default: '',
   },
+  mfa: {
+    type: Boolean,
+    required: false,
+    default: false
+  },
+  githubLink: {
+    type: String,
+    required: false,
+    default: ''
+  }
 });
 
 module.exports = model('Users', userSchema);
