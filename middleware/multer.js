@@ -56,7 +56,7 @@ module.exports = {
         cb(
           null,
           `attachments/${
-            file.originalname
+            file.originalname.replace(path.extname(file.originalname), '')
           }-${new Date().getTime()}${path.extname(file.originalname)}`
         );
       },
