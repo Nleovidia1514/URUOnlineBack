@@ -41,20 +41,20 @@ app.use(passport.session());
 passport.use(passportMiddleware);
 
 
-//ROUTES
-const authRoutes = require('./routes/auth');
-const postsRoutes = require('./routes/posts');
-const courseRoutes = require('./routes/courses');
-const attachmentRoutes = require('./routes/attachment');
-const examRoutes = require('./routes/exam');
 
-app.use('/auth', authRoutes);
-app.use('/posts', postsRoutes);
-app.use('/courses', courseRoutes);
-app.use('/attachments', attachmentRoutes);
-app.use('/exams', examRoutes);
-//
 
+
+const indexRouter = require('./routes/index');
+
+app.use('/api', indexRouter);
+
+app.get('/*', function (req, res) {
+  res.sendFile(path.join(__dirname, '/public/index.html'), function (err) {
+    if (err) {
+      res.status(500).send(err)
+    }
+  })
+})
 
 app.listen(process.env.PORT || 3000, () => {
   console.log('Server listening on http://localhost:3000');
